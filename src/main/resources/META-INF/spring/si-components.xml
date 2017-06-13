@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:int="http://www.springframework.org/schema/integration"
+       xmlns:int-file="http://www.springframework.org/schema/integration/file"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+	   http://www.springframework.org/schema/integration
+	   http://www.springframework.org/schema/integration/spring-integration.xsd
+	   http://www.springframework.org/schema/integration/file
+	   http://www.springframework.org/schema/integration/file/spring-integration-file.xsd
+       http://www.springframework.org/schema/context
+       http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <context:annotation-config/>
+
+    <int-file:inbound-channel-adapter id="producer-file-adapter"
+                                      channel="inboundChannel"
+                                      directory="c:/si/source"
+                                      prevent-duplicates="true"
+                                      filename-pattern="*.csv">
+
+        <int:poller fixed-rate="5000"/>
+
+    </int-file:inbound-channel-adapter>
+
+    <int:channel id="inboundChannel"/>
+
+    <int-file:outbound-channel-adapter id="pre-processing-file-adapter"
+                                       channel="inboundChannel"
+                                       directory="c:/si/processing"
+                                       delete-source-files="true"/>
+
+    <int:channel id="processingChannel"/>
+
+    <int-file:inbound-channel-adapter id="processing-file-adapter"
+                                      channel="processingChannel"
+                                      directory="c:/si/processing">
+
+        <int:poller fixed-rate="5000"/>
+
+    </int-file:inbound-channel-adapter>
+
+    <int-file:file-to-string-transformer id="file-2-string-transformer"
+                                         input-channel="processingChannel"
+                                         output-channel="csv-inboundChannel"
+                                         charset="UTF-8"/>
+
+    <int:channel id="csv-inboundChannel"/>
+
+    <int:service-activator ref="additionTitleServiceBean"
+                           method="processing"
+                           input-channel="csv-inboundChannel"
+                           output-channel="outboundChannel"/>
+
+    <int:channel id="outboundChannel"/>
+
+    <bean id="additionTitleServiceBean" class="com.si.service.AdditionTitleServiceActivator"/>
+
+    <int-file:outbound-channel-adapter id="consumer-file-adapter"
+                                       channel="outboundChannel"
+                                       directory="c:/si/completed"
+                                       delete-source-files="true"/>
+
+    <int:service-activator input-channel="errorChannel"
+                           ref="errorLogger" method="logError"/>
+
+
+    <int-file:outbound-channel-adapter id="error"
+                                       directory="c:/si/error"
+                                       delete-source-files="true"/>
+
+    <bean id="errorHandler" class="com.si.handler.ErrorHandlerImpl">
+        <property name="defaultErrorChannel" ref="error"/>
+    </bean>
+
+    <bean id="errorLogger" class="com.si.logger.ErrorLogger"/>
+
+</beans>
+
